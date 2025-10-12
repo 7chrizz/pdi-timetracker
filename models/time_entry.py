@@ -1,23 +1,26 @@
 # KEIN: from __future__ import annotations
 
 from datetime import date, datetime, time
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from pydantic import field_validator
-from sqlalchemy import Column, Date as SA_Date, Time as SA_Time
-from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column
+from sqlalchemy import Date as SA_Date
+from sqlalchemy import Time as SA_Time
+from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from .employee import Employee
+
 
 class TimeEntry(SQLModel, table=True):
     __tablename__ = "time_entry"
 
     id: int | None = Field(default=None, primary_key=True)
     Start: time = Field(sa_column=Column("Start", SA_Time, nullable=False))
-    Ende:  time = Field(sa_column=Column("Ende",  SA_Time, nullable=False))
+    Ende: time = Field(sa_column=Column("Ende", SA_Time, nullable=False))
     Pause: time = Field(sa_column=Column("Pause", SA_Time, nullable=False))
-    Date:  date = Field(sa_column=Column("Date",  SA_Date, nullable=False))
+    Date: date = Field(sa_column=Column("Date", SA_Date, nullable=False))
 
     employee_id: int = Field(foreign_key="employee.id", index=True)
     employee: "Employee" = Relationship(back_populates="time_entries")
@@ -42,7 +45,8 @@ class TimeEntry(SQLModel, table=True):
             if s.isdigit():
                 if len(s) != 4:
                     raise TypeError("Time must be datetime.time, 'HH:MM' or 'HHMM'.")
-                h = int(s[:2]); m = int(s[2:])
+                h = int(s[:2])
+                m = int(s[2:])
                 if not (0 <= h <= 23 and 0 <= m <= 59):
                     raise TypeError("Invalid time.")
                 return time(hour=h, minute=m)

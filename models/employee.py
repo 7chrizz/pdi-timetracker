@@ -1,12 +1,13 @@
 from datetime import date
 from enum import Enum
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 from pydantic import EmailStr, field_validator
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from .time_entry import TimeEntry
+
 
 class Gender(str, Enum):
     MALE = "male"
@@ -14,12 +15,13 @@ class Gender(str, Enum):
     DIVERSE = "diverse"
     UNKNOWN = "unknown"
 
+
 class Employee(SQLModel, table=True):
     __tablename__ = "employee"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     first_name: str = Field(min_length=1, max_length=100, index=True)
-    last_name: str  = Field(min_length=1, max_length=100, index=True)
+    last_name: str = Field(min_length=1, max_length=100, index=True)
     email: EmailStr = Field(sa_column_kwargs={"unique": True, "index": True})
     birth_date: date
     hire_date: date

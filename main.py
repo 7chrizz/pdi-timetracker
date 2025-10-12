@@ -1,20 +1,35 @@
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
-from sqlmodel import SQLModel, create_engine, Session, select
+from sqlmodel import Session, SQLModel, create_engine, select
+
 from models import Employee, TimeEntry
 
 DB_URL = "sqlite:///timetracker.db"
 
 MONTH_EN = [
     "",
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
 ]
 
+
 def minutes_from_entry(e) -> int:
-    def to_min(t): return t.hour * 60 + t.minute
+    def to_min(t):
+        return t.hour * 60 + t.minute
+
     start = to_min(e.Start)
     end = to_min(e.Ende)
     pause = to_min(e.Pause)
@@ -22,12 +37,15 @@ def minutes_from_entry(e) -> int:
         end += 24 * 60
     return max(0, end - start - pause)
 
+
 def fmt_hhmm(mins: int) -> str:
     return f"{mins // 60:02d}:{mins % 60:02d}"
 
 
 def get_engine():
-    engine = create_engine(DB_URL, echo=False, connect_args={"check_same_thread": False})
+    engine = create_engine(
+        DB_URL, echo=False, connect_args={"check_same_thread": False}
+    )
     with engine.connect() as conn:
         conn.exec_driver_sql("PRAGMA foreign_keys = ON;")
     return engine
@@ -64,7 +82,9 @@ def prompt_time(label: str) -> str | None:
         print("✗ Invalid time. Allowed: HH:MM or HHMM.")
 
 
-def pick_employee_interactive(s: Session, title: str = "Select employee") -> Employee | None:
+def pick_employee_interactive(
+    s: Session, title: str = "Select employee"
+) -> Employee | None:
     employees = s.exec(
         select(Employee).order_by(Employee.last_name, Employee.first_name)
     ).all()
@@ -110,7 +130,9 @@ def create_employee_interactive(s: Session) -> Employee | None:
     if hire is None:
         return None
 
-    emp = Employee(first_name=first, last_name=last, email=email, birth_date=born, hire_date=hire)
+    emp = Employee(
+        first_name=first, last_name=last, email=email, birth_date=born, hire_date=hire
+    )
     s.add(emp)
     try:
         s.commit()
@@ -147,7 +169,7 @@ def add_time_entry_interactive(s: Session):
             Start=start,
             Ende=end,
             Pause=pause,
-            employee_id=emp.id
+            employee_id=emp.id,
         )
     except Exception as e:
         print(f"✗ Invalid inputs: {e}")
@@ -221,7 +243,7 @@ def print_report_for_employee(s: Session):
     if sel is None:
         print("\nMonthly overview:")
         print("-" * 60)
-        for (y, m) in ym_list:
+        for y, m in ym_list:
             print(f"{MONTH_EN[m]} {y:<4}  —  {fmt_hhmm(monthly_sum[(y, m)])}")
         print("-" * 60)
         return
@@ -245,6 +267,7 @@ def print_report_for_employee(s: Session):
 
     print("-" * 60)
     print(f"Sum (month): {fmt_hhmm(monthly_sum[(y, m)])}")
+
 
 def main():
     engine = get_engine()
@@ -270,6 +293,7 @@ def main():
                 break
             else:
                 print("Invalid choice.")
+
 
 if __name__ == "__main__":
     main()
