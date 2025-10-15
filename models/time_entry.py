@@ -1,4 +1,4 @@
-# KEIN: from __future__ import annotations
+# Code für Time Entries into DB
 
 from datetime import date, datetime, time
 from typing import TYPE_CHECKING
