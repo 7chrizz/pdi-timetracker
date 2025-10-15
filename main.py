@@ -26,8 +26,8 @@ MONTH_EN = [
 ]
 
 
-def minutes_from_entry(e) -> int:
-    def to_min(t):
+def minutes_from_entry(e: TimeEntry) -> int:
+    def to_min(t: date) -> int:
         return t.hour * 60 + t.minute
 
     start = to_min(e.Start)
@@ -130,6 +130,7 @@ def create_employee_interactive(s: Session) -> Employee | None:
     if hire is None:
         return None
 
+    # TODO: split user input vs db logic = single responsibility principle
     emp = Employee(
         first_name=first, last_name=last, email=email, birth_date=born, hire_date=hire
     )
@@ -145,11 +146,16 @@ def create_employee_interactive(s: Session) -> Employee | None:
         return None
 
 
-def add_time_entry_interactive(s: Session):
-    emp = pick_employee_interactive(s, "Record time – choose employee")
-    if not emp:
-        return
+def add_time_entry_interactive(s: Session, emp: Employee | None = None):
+    # if employee is not passed in go into interactive mode
+    # this makes it easier to test this function
+    if emp is None:
+        emp = pick_employee_interactive(s, "Record time – choose employee")
+        if not emp:
+            return
 
+    # TODO: this still has user input so consider splitting further
+    # into user input vs db logic = single responsibility principle
     d = prompt_ddmmyyyy("Date")
     if d is None:
         return
@@ -196,6 +202,8 @@ def print_report_for_employee(s: Session):
     if not emp:
         return
 
+    # TODO: could also split this into building up the ym_list vs
+    # the reporting to standard output
     all_rows = s.exec(
         select(TimeEntry)
         .where(TimeEntry.employee_id == emp.id)
