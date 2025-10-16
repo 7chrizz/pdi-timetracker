@@ -1,7 +1,10 @@
-from collections import defaultdict
-from datetime import date
+from __future__ import annotations
 
-from sqlalchemy.exc import IntegrityError
+from collections import Counter
+from datetime import date
+from typing import List, Tuple
+
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -46,8 +49,6 @@ def get_engine():
     engine = create_engine(
         DB_URL, echo=False, connect_args={"check_same_thread": False}
     )
-    with engine.connect() as conn:
-        conn.exec_driver_sql("PRAGMA foreign_keys = ON;")
     return engine
 
 
@@ -82,36 +83,47 @@ def prompt_time(label: str) -> str | None:
         print("✗ Invalid time. Allowed: HH:MM or HHMM.")
 
 
-def pick_employee_interactive(
-    s: Session, title: str = "Select employee"
-) -> Employee | None:
-    employees = s.exec(
+def fetch_employees(s: Session) -> List["Employee"]:
+    return s.exec(
         select(Employee).order_by(Employee.last_name, Employee.first_name)
     ).all()
+
+
+def format_employee_row(e: "Employee", idx: int) -> str:
+    email = e.email or "—"
+    birth = e.birth_date.strftime("%d.%m.%Y") if e.birth_date else "—"
+    hire = e.hire_date.strftime("%d.%m.%Y") if e.hire_date else "—"
+    return f"[{idx}] {e.first_name} {e.last_name}  (Email: {email}, Birth: {birth}, Hire: {hire})"
+
+
+def prompt_index(max_n: int) -> int | None:
+    print("[0] Cancel")
+    while True:
+        choice = input("Enter number: ").strip().lower()
+        if choice in {"0", "q", "quit", ""}:
+            return None
+        if choice.isdigit():
+            idx = int(choice)
+            if 1 <= idx <= max_n:
+                return idx
+        print("Invalid choice. Please enter a valid number.")
+
+
+def pick_employee(s: Session, title: str = "Select employee") -> "Employee | None":
+    employees = fetch_employees(s)
     if not employees:
         print("✗ No employees in the database.")
         return None
 
     print(f"\n{title}:")
-    for i, e in enumerate(employees, start=1):
-        print(
-            f"[{i}] {e.first_name} {e.last_name}  "
-            f"(Email: {e.email}, Birth: {e.birth_date:%d.%m.%Y}, Hire: {e.hire_date:%d.%m.%Y})"
-        )
-    print("[0] Cancel")
+    for i, employee in enumerate(employees, start=1):
+        print(format_employee_row(employee, i))
 
-    while True:
-        choice = input("Enter number: ").strip()
-        if choice == "0" or choice.lower() in {"q", "quit"}:
-            return None
-        if choice.isdigit():
-            idx = int(choice)
-            if 1 <= idx <= len(employees):
-                return employees[idx - 1]
-        print("Invalid choice. Please enter a valid number.")
+    idx = prompt_index(len(employees))
+    return None if idx is None else employees[idx - 1]
 
 
-def create_employee_interactive(s: Session) -> Employee | None:
+def collect_employee_input() -> tuple[str, str, str, date, date] | None:
     print("\nCreate new employee (0=Cancel for any field):")
     first = input("First name: ").strip()
     if not first or first == "0":
@@ -130,123 +142,183 @@ def create_employee_interactive(s: Session) -> Employee | None:
     if hire is None:
         return None
 
-    # TODO: split user input vs db logic = single responsibility principle
-    emp = Employee(
-        first_name=first, last_name=last, email=email, birth_date=born, hire_date=hire
+    return first, last, email, born, hire
+
+
+def to_employee(
+    first: str, last: str, email: str, born: "date", hire: "date"
+) -> "Employee":
+    return Employee(
+        first_name=first,
+        last_name=last,
+        email=email,
+        birth_date=born,
+        hire_date=hire,
     )
-    s.add(emp)
+
+
+def save_employee(s: Session, emp: "Employee") -> bool:
     try:
+        s.add(emp)
         s.commit()
         s.refresh(emp)
-        print(f"✓ Employee created: {emp.first_name} {emp.last_name} ({emp.email})")
-        return emp
+        return True
     except IntegrityError:
         s.rollback()
+        return False
+
+
+def create_employee(s: Session) -> "Employee | None":
+    data = collect_employee_input()
+    if data is None:
+        return None
+    first, last, email, born, hire = data
+
+    emp = to_employee(first, last, email, born, hire)
+    if save_employee(s, emp):
+        print(f"✓ Employee created: {emp.first_name} {emp.last_name} ({emp.email})")
+        return emp
+    else:
         print("✗ Email already in use (UNIQUE).")
         return None
 
 
-def add_time_entry_interactive(s: Session, emp: Employee | None = None):
-    # if employee is not passed in go into interactive mode
-    # this makes it easier to test this function
-    if emp is None:
-        emp = pick_employee_interactive(s, "Record time – choose employee")
-        if not emp:
-            return
-
-    # TODO: this still has user input so consider splitting further
-    # into user input vs db logic = single responsibility principle
+def collect_time_entry_input() -> tuple[date, str, str, str] | None:
     d = prompt_ddmmyyyy("Date")
     if d is None:
-        return
+        return None
     start = prompt_time("Start")
     if start is None:
-        return
+        return None
     end = prompt_time("End")
     if end is None:
-        return
+        return None
     pause = prompt_time("Break")
     if pause is None:
-        return
+        return None
+    return d, start, end, pause
 
-    try:
-        te = TimeEntry.from_input(
-            Date=d.strftime("%d.%m.%Y"),
-            Start=start,
-            Ende=end,
-            Pause=pause,
-            employee_id=emp.id,
-        )
-    except Exception as e:
-        print(f"✗ Invalid inputs: {e}")
-        return
 
+def to_time_entry(
+    employee_id: int, d: date, start: str, end: str, pause: str
+) -> "TimeEntry":
+    return TimeEntry.from_input(
+        Date=d.strftime("%d.%m.%Y"),
+        Start=start,
+        Ende=end,
+        Pause=pause,
+        employee_id=employee_id,
+    )
+
+
+def save_time_entry(s: Session, te: "TimeEntry") -> bool:
     exists = s.exec(
         select(TimeEntry).where(
             TimeEntry.Date == te.Date,
             TimeEntry.Start == te.Start,
-            TimeEntry.employee_id == emp.id,
+            TimeEntry.employee_id == te.employee_id,
         )
     ).first()
     if exists:
-        print("ⓘ Similar entry already exists. No insert.")
-        return
-
+        return False
     s.add(te)
     s.commit()
-    print(f"✓ Entry saved for {emp.first_name} {emp.last_name} on {te.Date:%d.%m.%Y}.")
+    return True
 
 
-def print_report_for_employee(s: Session):
-    emp = pick_employee_interactive(s, "Report – choose employee")
+def add_time_entry_interactive(s: Session):
+    emp = pick_employee(s, "Record time – choose employee")
     if not emp:
         return
+    inputs = collect_time_entry_input()
+    if inputs is None:
+        return
+    d, start, end, pause = inputs
 
-    # TODO: could also split this into building up the ym_list vs
-    # the reporting to standard output
-    all_rows = s.exec(
+    try:
+        te = to_time_entry(emp.id, d, start, end, pause)
+    except ValueError as e:
+        print(f"✗ Invalid input: {e}")
+        return
+    except Exception as e:
+        print(f"✗ Could not build time entry: {e}")
+        return
+
+    try:
+        ok = save_time_entry(s, te)
+    except IntegrityError:
+        print("✗ Database constraint violated (IntegrityError).")
+        return
+    except OperationalError:
+        print("✗ Database is busy/locked (OperationalError). Please retry.")
+        return
+    except SQLAlchemyError as e:
+        print(f"✗ Database error: {e.__class__.__name__}.")
+        return
+
+    if ok:
+        print(f"✓ Entry saved for {emp.first_name} {emp.last_name}.")
+    else:
+        print("ⓘ Similar entry already exists. No insert.")
+
+
+def fetch_employee_entries(s: Session, employee_id: int) -> List[TimeEntry]:
+    return s.exec(
         select(TimeEntry)
-        .where(TimeEntry.employee_id == emp.id)
+        .where(TimeEntry.employee_id == employee_id)
         .options(selectinload(TimeEntry.employee))
         .order_by(TimeEntry.Date, TimeEntry.Start)
     ).all()
 
-    monthly_sum = defaultdict(int)
-    for r in all_rows:
-        ym = (r.Date.year, r.Date.month)
-        monthly_sum[ym] += minutes_from_entry(r)
 
+def summarize_minutes_by_month(rows: list[TimeEntry]) -> dict[tuple[int, int], int]:
+    acc = Counter()
+    for r in rows:
+        acc[(r.Date.year, r.Date.month)] += minutes_from_entry(r)
+    return dict(acc)
+
+
+def prompt_month_choice(ym_list: List[Tuple[int, int]]) -> Tuple[int, int] | None:
+    print("Available months:")
+    print("[0] All months (monthly overview)")
+    for i, (y, m) in enumerate(ym_list, start=1):
+        print(f"[{i}] {MONTH_EN[m]} {y}")
+
+    while True:
+        choice = input("Choose month (number, 0/Enter=Overview): ").strip()
+        if choice in {"", "0"}:
+            return None
+        if choice.isdigit():
+            idx = int(choice)
+            if 1 <= idx <= len(ym_list):
+                return ym_list[idx - 1]
+        print("Invalid choice.")
+
+
+def print_report_for_employee(s: Session):
+    emp = pick_employee(s, "Report – choose employee")
+    if not emp:
+        return
+
+    rows = fetch_employee_entries(s, emp.id)
+    monthly_sum = summarize_minutes_by_month(rows)
     ym_list = sorted(monthly_sum.keys())
 
     print("\nReport for:")
+    birth = emp.birth_date.strftime("%d.%m.%Y") if emp.birth_date else "—"
+    hire = emp.hire_date.strftime("%d.%m.%Y") if emp.hire_date else "—"
+    email = emp.email or "—"
     print(f"  Name:      {emp.first_name} {emp.last_name}")
-    print(f"  Birth:     {emp.birth_date:%d.%m.%Y}")
-    print(f"  Hire date: {emp.hire_date:%d.%m.%Y}")
-    print(f"  Email:     {emp.email}")
+    print(f"  Birth:     {birth}")
+    print(f"  Hire date: {hire}")
+    print(f"  Email:     {email}")
     print("-" * 60)
 
     if not ym_list:
         print("No entries found.")
         return
 
-    # Month selection
-    print("Available months:")
-    print("[0] All months (monthly overview)")
-    for i, (y, m) in enumerate(ym_list, start=1):
-        print(f"[{i}] {MONTH_EN[m]} {y}")
-
-    sel = None
-    while True:
-        choice = input("Choose month (number, 0/Enter=Overview): ").strip()
-        if choice == "" or choice == "0":
-            sel = None
-            break
-        if choice.isdigit():
-            idx = int(choice)
-            if 1 <= idx <= len(ym_list):
-                sel = ym_list[idx - 1]  # (year, month)
-                break
-        print("Invalid choice.")
+    sel = prompt_month_choice(ym_list)
 
     if sel is None:
         print("\nMonthly overview:")
@@ -257,22 +329,21 @@ def print_report_for_employee(s: Session):
         return
 
     y, m = sel
-    rows = [r for r in all_rows if r.Date.year == y and r.Date.month == m]
+    month_rows = [r for r in rows if r.Date.year == y and r.Date.month == m]
 
     print(f"\nPeriod: {MONTH_EN[m]} {y}")
-    if not rows:
+    if not month_rows:
         print("No entries in this month.")
         return
 
     print("Entries:")
-    for r in rows:
+    for r in month_rows:
         print(
             f"[{r.id}] {r.Date:%d.%m.%Y}  "
             f"{r.Start:%H:%M}–{r.Ende:%H:%M}  "
             f"Break {r.Pause:%H:%M}  "
             f"Net {fmt_hhmm(minutes_from_entry(r))}"
         )
-
     print("-" * 60)
     print(f"Sum (month): {fmt_hhmm(monthly_sum[(y, m)])}")
 
@@ -291,13 +362,13 @@ def main():
             choice = input("Choose [1-4]: ").strip()
 
             if choice == "1":
-                create_employee_interactive(s)
+                create_employee(s)
             elif choice == "2":
                 add_time_entry_interactive(s)
             elif choice == "3":
                 print_report_for_employee(s)
             elif choice == "4":
-                print("Bye!")
+                print("Bye! Have a nice day!")
                 break
             else:
                 print("Invalid choice.")
