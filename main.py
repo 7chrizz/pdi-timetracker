@@ -261,7 +261,7 @@ def print_report_for_employee(s: Session):
 
     print(f"\nPeriod: {MONTH_EN[m]} {y}")
     if not rows:
-        print("No entries in this month.")
+        print("No entries in this month!")
         return
 
     print("Entries:")
