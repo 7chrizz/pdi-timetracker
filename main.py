@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import date
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -95,7 +96,7 @@ def format_employee_row(e: "Employee", idx: int) -> str:
     return f"[{idx}] {e.first_name} {e.last_name}  (Email: {email}, Birth: {birth}, Hire: {hire})"
 
 
-def prompt_index(max_n: int) -> Optional[int]:
+def prompt_index(max_n: int) -> int | None:
     print("[0] Cancel")
     while True:
         choice = input("Enter number: ").strip().lower()
@@ -115,14 +116,14 @@ def pick_employee(s: Session, title: str = "Select employee") -> "Employee | Non
         return None
 
     print(f"\n{title}:")
-    for i, e in enumerate(employees, start=1):
-        print(format_employee_row(e, i))
+    for i, employee in enumerate(employees, start=1):
+        print(format_employee_row(employee, i))
 
     idx = prompt_index(len(employees))
     return None if idx is None else employees[idx - 1]
 
 
-def collect_employee_input() -> Optional[Tuple[str, str, str, "date", "date"]]:
+def collect_employee_input() -> tuple[str, str, str, date, date] | None:
     print("\nCreate new employee (0=Cancel for any field):")
     first = input("First name: ").strip()
     if not first or first == "0":
@@ -182,7 +183,7 @@ def create_employee(s: Session) -> "Employee | None":
         return None
 
 
-def collect_time_entry_input() -> Optional[tuple[date, str, str, str]]:
+def collect_time_entry_input() -> tuple[date, str, str, str] | None:
     d = prompt_ddmmyyyy("Date")
     if d is None:
         return None
@@ -236,14 +237,27 @@ def add_time_entry_interactive(s: Session):
 
     try:
         te = to_time_entry(emp.id, d, start, end, pause)
+    except ValueError as e:
+        print(f"✗ Invalid input: {e}")
+        return
     except Exception as e:
-        print(f"✗ Invalid inputs: {e}")
+        print(f"✗ Could not build time entry: {e}")
         return
 
-    if save_time_entry(s, te):
-        print(
-            f"✓ Entry saved for {emp.first_name} {emp.last_name} on {te.Date:%d.%m.%Y}."
-        )
+    try:
+        ok = save_time_entry(s, te)
+    except IntegrityError:
+        print("✗ Database constraint violated (IntegrityError).")
+        return
+    except OperationalError:
+        print("✗ Database is busy/locked (OperationalError). Please retry.")
+        return
+    except SQLAlchemyError as e:
+        print(f"✗ Database error: {e.__class__.__name__}.")
+        return
+
+    if ok:
+        print(f"✓ Entry saved for {emp.first_name} {emp.last_name}.")
     else:
         print("ⓘ Similar entry already exists. No insert.")
 
@@ -258,14 +272,13 @@ def fetch_employee_entries(s: Session, employee_id: int) -> List[TimeEntry]:
 
 
 def summarize_minutes_by_month(rows: list[TimeEntry]) -> dict[tuple[int, int], int]:
-    acc: dict[tuple[int, int], int] = {}
+    acc = Counter()
     for r in rows:
-        ym = (r.Date.year, r.Date.month)
-        acc[ym] = acc.get(ym, 0) + minutes_from_entry(r)
-    return acc
+        acc[(r.Date.year, r.Date.month)] += minutes_from_entry(r)
+    return dict(acc)
 
 
-def prompt_month_choice(ym_list: List[Tuple[int, int]]) -> Optional[Tuple[int, int]]:
+def prompt_month_choice(ym_list: List[Tuple[int, int]]) -> Tuple[int, int] | None:
     print("Available months:")
     print("[0] All months (monthly overview)")
     for i, (y, m) in enumerate(ym_list, start=1):
