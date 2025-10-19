@@ -4,12 +4,15 @@ from collections import Counter
 from datetime import date
 from typing import List, Tuple
 
+from rich import print
+from rich.console import Console
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from models import Employee, TimeEntry
 
+console = Console(force_terminal=True, force_interactive=True)
 DB_URL = "sqlite:///timetracker.db"
 
 MONTH_EN = [
@@ -54,10 +57,22 @@ def get_engine():
 
 def _parse_ddmmyyyy_loose(s: str) -> date:
     s = s.strip()
-    parts = [p for p in s.split(".") if p != ""]
+    parts = [p for p in s.split(".") if p]
     if len(parts) != 3:
-        raise ValueError("Invalid format")
-    d, m, y = map(int, parts)
+        raise ValueError("Invalid format (use D.M.YYYY or D.M.YY)")
+    d_str, m_str, y_str = parts
+
+    if not (d_str.isdigit() and m_str.isdigit() and y_str.isdigit()):
+        raise ValueError("Date parts must be numbers")
+
+    d, m = int(d_str), int(m_str)
+
+    if len(y_str) == 2:
+        y = 2000 + int(y_str)
+    elif len(y_str) == 4:
+        y = int(y_str)
+    else:
+        raise ValueError("Year must be 2 or 4 digits")
     return date(y, m, d)
 
 
@@ -69,7 +84,7 @@ def prompt_ddmmyyyy(label: str) -> date | None:
         try:
             return _parse_ddmmyyyy_loose(s)
         except ValueError:
-            print("✗ Invalid date. Please use D.M.YYYY or DD.MM.YYYY.")
+            print("[red]✗[/red] Invalid date. Please use D.M.YYYY or DD.MM.YYYY.")
 
 
 def prompt_time(label: str) -> str | None:
@@ -81,6 +96,28 @@ def prompt_time(label: str) -> str | None:
         if (":" in t and len(t.split(":")) == 2) or (t.isdigit() and len(t) in (3, 4)):
             return s
         print("✗ Invalid time. Allowed: HH:MM or HHMM.")
+
+
+def prompt_break_minutes(label: str = "Break in (minutes): ") -> str | None:
+    while True:
+        s = input(f"{label}").strip().lower()
+        if s in {"", "q", "quit"}:
+            return None
+        if s.isdigit():
+            mins = int(s)
+            if 0 <= mins <= 24 * 60:
+                h, m = divmod(mins, 60)
+                return f"{h:02d}:{m:02d}"
+        print("✗ Invalid value. Enter minutes as a non-negative integer (0–1440).")
+
+
+def calc_age(born: date, ref: date | None = None) -> int:
+    if ref is None:
+        ref = date.today()
+    years = ref.year - born.year
+    if (ref.month, ref.day) < (born.month, born.day):
+        years -= 1
+    return years
 
 
 def fetch_employees(s: Session) -> List["Employee"]:
@@ -175,8 +212,12 @@ def create_employee(s: Session) -> "Employee | None":
     first, last, email, born, hire = data
 
     emp = to_employee(first, last, email, born, hire)
+
     if save_employee(s, emp):
-        print(f"✓ Employee created: {emp.first_name} {emp.last_name} ({emp.email})")
+        age_txt = f", Age: {calc_age(emp.birth_date)}" if emp.birth_date else ""
+        console.print(
+            f"[green]✓ Employee created[/green]: {emp.first_name} {emp.last_name} ({emp.email}){age_txt}"
+        )
         return emp
     else:
         print("✗ Email already in use (UNIQUE).")
@@ -184,16 +225,34 @@ def create_employee(s: Session) -> "Employee | None":
 
 
 def collect_time_entry_input() -> tuple[date, str, str, str] | None:
-    d = prompt_ddmmyyyy("Date")
-    if d is None:
-        return None
+    while True:
+        answer = (
+            console.input("Time entry for [bold green]today's date[/bold green]? (y/n)")
+            .strip()
+            .lower()
+        )
+        if answer == "0":
+            return None
+        elif answer in {"y", "yes"}:
+            d = date.today()
+            console.print(
+                f"Time entry for date [green]{d.strftime('%d.%m.%Y')}[/green]"
+            )
+            break
+        elif answer in {"", "n", "no"}:
+            d = prompt_ddmmyyyy("Date")
+            if d is None:
+                return None
+            break
+        else:
+            print("Please answer y/n, or 0 to cancel")
     start = prompt_time("Start")
     if start is None:
         return None
     end = prompt_time("End")
     if end is None:
         return None
-    pause = prompt_time("Break")
+    pause = prompt_break_minutes()
     if pause is None:
         return None
     return d, start, end, pause
@@ -238,28 +297,35 @@ def add_time_entry_interactive(s: Session):
     try:
         te = to_time_entry(emp.id, d, start, end, pause)
     except ValueError as e:
-        print(f"✗ Invalid input: {e}")
+        console.print(f"✗ Invalid input: {e}")
         return
     except Exception as e:
-        print(f"✗ Could not build time entry: {e}")
+        console.print(f"✗ Could not build time entry: {e}")
         return
 
     try:
         ok = save_time_entry(s, te)
     except IntegrityError:
-        print("✗ Database constraint violated (IntegrityError).")
+        console.print("✗ Database constraint violated (IntegrityError).")
         return
     except OperationalError:
-        print("✗ Database is busy/locked (OperationalError). Please retry.")
+        console.print("✗ Database is busy/locked (OperationalError). Please retry.")
         return
     except SQLAlchemyError as e:
-        print(f"✗ Database error: {e.__class__.__name__}.")
+        console.print(f"✗ Database error: {e.__class__.__name__}.")
         return
 
     if ok:
-        print(f"✓ Entry saved for {emp.first_name} {emp.last_name}.")
+        net_txt = fmt_hhmm(minutes_from_entry(te))
+        try:
+            date_txt = te.Date.strftime("%d.%m.%Y")
+        except Exception:
+            date_txt = str(te.Date)
+        console.print(
+            f"[green]✓ Entry saved[/green]: for {emp.first_name} {emp.last_name} on {date_txt}. Net working time: {net_txt} hours."
+        )
     else:
-        print("ⓘ Similar entry already exists. No insert.")
+        console.print("ⓘ [red]Similar entry already exists. No insert.[/red]")
 
 
 def fetch_employee_entries(s: Session, employee_id: int) -> List[TimeEntry]:
@@ -354,11 +420,11 @@ def main():
 
     with Session(engine) as s:
         while True:
-            print("\n--- Menu ---")
-            print("1) Create new employee")
-            print("2) Record time for employee")
-            print("3) Show report")
-            print("4) Exit")
+            console.print("\n--- [cyan]Menu[/cyan] ---")
+            console.print("[bold green]1)[/bold green] Create new employee")
+            console.print("[bold green]2)[/bold green] Record time for employee")
+            console.print("[bold green]3)[/bold green] Show report")
+            console.print("[bold green]4)[/bold green] Exit")
             choice = input("Choose [1-4]: ").strip()
 
             if choice == "1":
@@ -368,7 +434,7 @@ def main():
             elif choice == "3":
                 print_report_for_employee(s)
             elif choice == "4":
-                print("Bye! Have a nice day!")
+                console.print("[bold green]Bye![/bold green] Have a nice day!")
                 break
             else:
                 print("Invalid choice.")
