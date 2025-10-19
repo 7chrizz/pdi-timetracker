@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
 from datetime import date
 from typing import List, Tuple
 
@@ -144,6 +145,138 @@ def prompt_index(max_n: int) -> int | None:
             if 1 <= idx <= max_n:
                 return idx
         print("Invalid choice. Please enter a valid number.")
+
+
+def prompt_keep_str(label: str, current: str | None) -> str | None:
+    cur = current or ""
+    while True:
+        s = input(f"{label} [{cur}] (Enter=keep, 0=Cancel): ").strip()
+        if s == "0":
+            return None
+        if s == "":
+            return current
+        return s
+
+
+def prompt_keep_date(label: str, current: date | None) -> date | None | str:
+    cur = current.strftime("%d.%m.%Y") if current else ""
+    while True:
+        s = input(f"{label} [{cur}] (Enter=keep, 0=Cancel): ").strip()
+        if s == "0":
+            return None
+        if s == "":
+            return "KEEP"
+        try:
+            return _parse_ddmmyyyy_loose(s)
+        except ValueError:
+            print("[red]✗[/red] Invalid date. Please use D.M.YYYY or D.M.YY.")
+
+
+@dataclass
+class EmployeePatch:
+    first_name: str | None = None
+    last_name: str | None = None
+    email: str | None = None
+    birth_date: date | None = None
+    hire_date: date | None = None
+
+
+def collect_employee_patch_input(emp: Employee) -> EmployeePatch | None:
+    print("\nEdit fields (Enter keeps current, 0 cancels):")
+
+    new_first = prompt_keep_str("First name", emp.first_name)
+    if new_first is None:
+        print("Canceled.")
+        return None
+
+    new_last = prompt_keep_str("Last name", emp.last_name)
+    if new_last is None:
+        print("Canceled.")
+        return None
+
+    new_email = prompt_keep_str("Email", emp.email or "")
+    if new_email is None:
+        print("Canceled.")
+        return None
+
+    bd = prompt_keep_date("Birth date", emp.birth_date)
+    if bd is None:
+        print("Canceled.")
+        return None
+
+    hd = prompt_keep_date("Hire date", emp.hire_date)
+    if hd is None:
+        print("Canceled.")
+        return None
+
+    patch = EmployeePatch()
+
+    if new_first != emp.first_name:
+        patch.first_name = new_first
+    if new_last != emp.last_name:
+        patch.last_name = new_last
+    if new_email != (emp.email or ""):
+        patch.email = new_email if new_email != "" else None
+
+    if bd != "KEEP":
+        patch.birth_date = bd
+    if hd != "KEEP":
+        patch.hire_date = hd
+
+    return patch
+
+
+def apply_employee_patch(
+    s: Session, employee_id: int, patch: EmployeePatch
+) -> tuple[bool, str, Employee | None]:
+    emp = s.get(Employee, employee_id)
+    if not emp:
+        return False, "Employee not found.", None
+    if patch.first_name is not None:
+        emp.first_name = patch.first_name
+    if patch.last_name is not None:
+        emp.last_name = patch.last_name
+    if patch.email is not None:
+        emp.email = patch.email
+    if patch.birth_date is not None:
+        emp.birth_date = patch.birth_date
+    if patch.hire_date is not None:
+        emp.hire_date = patch.hire_date
+
+    try:
+        s.add(emp)
+        s.commit()
+        s.refresh(emp)
+        return True, "Employee updated.", emp
+    except IntegrityError:
+        s.rollback()
+        return False, "Email already in use (UNIQUE).", None
+    except SQLAlchemyError as e:
+        s.rollback()
+        return False, f"Database error: {e.__class__.__name__}.", None
+
+
+def update_employee_interactive(s: Session):
+    emp = pick_employee(s, "Update employee – choose employee")
+    if not emp:
+        return
+
+    patch = collect_employee_patch_input(emp)
+    if patch is None:
+        return
+
+    ok, msg, updated = apply_employee_patch(s, emp.id, patch)
+    if ok:
+        age_txt = (
+            f", Age: {calc_age(updated.birth_date)}"
+            if updated and updated.birth_date
+            else ""
+        )
+        console.print(
+            f"[green]✓ {msg}[/green] {updated.first_name} {updated.last_name} ({updated.email}){age_txt}"
+        )
+    else:
+        console.print(f"[red]✗ {msg}[/red]")
 
 
 def pick_employee(s: Session, title: str = "Select employee") -> "Employee | None":
@@ -422,18 +555,21 @@ def main():
         while True:
             console.print("\n--- [cyan]Menu[/cyan] ---")
             console.print("[bold green]1)[/bold green] Create new employee")
-            console.print("[bold green]2)[/bold green] Record time for employee")
-            console.print("[bold green]3)[/bold green] Show report")
-            console.print("[bold green]4)[/bold green] Exit")
-            choice = input("Choose [1-4]: ").strip()
+            console.print("[bold green]2)[/bold green] Update employee")
+            console.print("[bold green]3)[/bold green] Record time for employee")
+            console.print("[bold green]4)[/bold green] Show report")
+            console.print("[bold green]5)[/bold green] Exit")
+            choice = input("Choose [1-5]: ").strip()
 
             if choice == "1":
                 create_employee(s)
             elif choice == "2":
-                add_time_entry_interactive(s)
+                update_employee_interactive(s)
             elif choice == "3":
-                print_report_for_employee(s)
+                add_time_entry_interactive(s)
             elif choice == "4":
+                print_report_for_employee(s)
+            elif choice == "5":
                 console.print("[bold green]Bye![/bold green] Have a nice day!")
                 break
             else:
