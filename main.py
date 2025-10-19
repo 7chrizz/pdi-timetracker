@@ -29,8 +29,8 @@ MONTH_EN = [
 ]
 
 
-def minutes_from_entry(e: TimeEntry) -> int:
-    def to_min(t: date) -> int:
+def minutes_from_entry(e) -> int:
+    def to_min(t):
         return t.hour * 60 + t.minute
 
     start = to_min(e.Start)
