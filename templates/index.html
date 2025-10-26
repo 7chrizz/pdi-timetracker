@@ -3,12 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TimeTrack</title>
+  <title>Record time for employee</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='basic.css') }}">
 </head>
 <body>
   <div class="wrap">
-    <h1>PDI TimeTracker</h1>
+    <div class="brand-banner">
+      <h1>Record time for employee</h1>
+    </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -61,19 +63,19 @@
 
         <div class="col-span-2">
           <button type="submit">Add Time</button>
-        </div>
         {% if saved_info %}
-        <div class="col-span-2" style="margin-top: 15px; text-align:center;">
-          <div class="saved-info">
-           <strong>Time added for:</strong><br>
-            {{ saved_info.name }}<br>
-            Start: {{ saved_info.start }}<br>
-            Ende: {{ saved_info.end }}<br>
-            Pause: {{ saved_info.pause }} min <br>
-            Nettozeit: {{ saved_info.netto }}
+          <div class="alert">
+            <div><strong>Time added for:</strong></div>
+            <div><strong>{{ saved_info.name }}</strong></div>
+            <dl class="saved-kv">
+              <dt>Start:</dt><dd>{{ saved_info.start }}</dd>
+              <dt>End:</dt><dd>{{ saved_info.end }}</dd>
+              <dt>Break:</dt><dd>{{ saved_info.pause }} min</dd>
+              <dt>Net working hours:</dt><dd>{{ saved_info.netto }}</dd>
+            </dl>
           </div>
-        </div>
         {% endif %}
+        </div>
       </form>
     </section>
   </div>
