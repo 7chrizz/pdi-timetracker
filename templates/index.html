@@ -1,28 +1,98 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Time Tracker</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 2rem;
-            background-color: #f9f9f9;
-        }
-        header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TimeTrack</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='basic.css') }}">
 </head>
 <body>
-    <header>
-        <h1>Welcome to Time Tracker</h1>
-    </header>
+  <div class="wrap">
+    <h1>PDI TimeTracker</h1>
 
-    <main>
-        <p>This is the start page.</p>
-    </main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="msg {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card">
+      <form id="time-form" method="post" action="{{ url_for('add_time') }}">
+        <div class="col-span-2">
+          <label for="employee">Employee (Dropdown)</label>
+          <select id="employee" name="employee" required>
+            <option value="" selected disabled>Please select …</option>
+            {% if employees and employees|length > 0 %}
+              {% for e in employees %}
+                <option value="{{ e.id }}">{{ e.first_name }} {{ e.last_name }}</option>
+              {% endfor %}
+            {% else %}
+              <option value="" disabled>(No employee found!)</option>
+            {% endif %}
+          </select>
+        </div>
+
+        <div class="col-span-2">
+          <label for="date">Date</label>
+          <div class="date-row">
+            <input id="date" name="date" type="date" required />
+            <label style="font-size:14px; display:flex; align-items:center; gap:4px;">
+              <input type="checkbox" id="today" /> Today
+            </label>
+          </div>
+        </div>
+
+        <div class="row col-span-2">
+          <div>
+            <label for="start">Start</label>
+            <input id="start" name="start" type="time" required />
+          </div>
+          <div>
+            <label for="end">End</label>
+            <input id="end" name="end" type="time" required />
+          </div>
+          <div>
+            <label for="pause">Break (Minutes)</label>
+            <input id="pause" name="pause" type="number" min="0" max="480" placeholder="i.E. 60" />
+          </div>
+        </div>
+
+        <div class="col-span-2">
+          <button type="submit">Add Time</button>
+        </div>
+        {% if saved_info %}
+        <div class="col-span-2" style="margin-top: 15px; text-align:center;">
+          <div class="saved-info">
+           <strong>Time added for:</strong><br>
+            {{ saved_info.name }}<br>
+            Start: {{ saved_info.start }}<br>
+            Ende: {{ saved_info.end }}<br>
+            Pause: {{ saved_info.pause }} min <br>
+            Nettozeit: {{ saved_info.netto }}
+          </div>
+        </div>
+        {% endif %}
+      </form>
+    </section>
+  </div>
+
+  <script>
+  const dateInput = document.getElementById('date');
+  const todayCheckbox = document.getElementById('today');
+
+  todayCheckbox.addEventListener('change', () => {
+    if (todayCheckbox.checked) {
+      const today = new Date();
+      const iso = today.toISOString().split('T')[0];
+      dateInput.value = iso;
+      dateInput.readOnly = true;
+    } else {
+      dateInput.readOnly = false;
+      dateInput.value = '';
+    }
+  });
+</script>
 </body>
 </html>

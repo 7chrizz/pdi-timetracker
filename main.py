@@ -179,6 +179,24 @@ class EmployeePatch:
     email: str | None = None
     birth_date: date | None = None
     hire_date: date | None = None
+    holidays: int | None = None
+
+
+def prompt_keep_int_nonneg(label: str, current: int) -> int | None:
+    holiday_input = input(f"{label} [{current}] (Enter=keep, 0=Cancel): ").strip()
+    if holiday_input == "0":
+        return None
+    if holiday_input == "":
+        return current
+    try:
+        holiday_validation = int(holiday_input)
+        if holiday_validation < 0:
+            print("Please enter a non-negative integer.")
+            return prompt_keep_int_nonneg(label, current)
+        return holiday_validation
+    except ValueError:
+        print("Please enter a valid integer.")
+        return prompt_keep_int_nonneg(label, current)
 
 
 def collect_employee_patch_input(emp: Employee) -> EmployeePatch | None:
@@ -209,6 +227,11 @@ def collect_employee_patch_input(emp: Employee) -> EmployeePatch | None:
         print("Canceled.")
         return None
 
+    hol = prompt_keep_int_nonneg("Holidays (days/year)", emp.holidays)
+    if hol is None:
+        print("Canceled.")
+        return None
+
     patch = EmployeePatch()
 
     if new_first != emp.first_name:
@@ -222,6 +245,9 @@ def collect_employee_patch_input(emp: Employee) -> EmployeePatch | None:
         patch.birth_date = bd
     if hd != "KEEP":
         patch.hire_date = hd
+
+    if hol != emp.holidays:
+        patch.holidays = hol
 
     return patch
 
@@ -242,6 +268,8 @@ def apply_employee_patch(
         emp.birth_date = patch.birth_date
     if patch.hire_date is not None:
         emp.hire_date = patch.hire_date
+    if patch.holidays is not None:
+        emp.holidays = patch.holidays
 
     try:
         s.add(emp)
@@ -267,13 +295,10 @@ def update_employee_interactive(s: Session):
 
     ok, msg, updated = apply_employee_patch(s, emp.id, patch)
     if ok:
-        age_txt = (
-            f", Age: {calc_age(updated.birth_date)}"
-            if updated and updated.birth_date
-            else ""
-        )
         console.print(
-            f"[green]✓ {msg}[/green] {updated.first_name} {updated.last_name} ({updated.email}){age_txt}"
+            f"[green]✓ {msg}[/green] {updated.first_name} {updated.last_name} "
+            f"({updated.email}){f', Age: {calc_age(updated.birth_date)}' if updated and updated.birth_date else ''}, "
+            f"Holidays: {updated.holidays}"
         )
     else:
         console.print(f"[red]✗ {msg}[/red]")
@@ -293,7 +318,22 @@ def pick_employee(s: Session, title: str = "Select employee") -> "Employee | Non
     return None if idx is None else employees[idx - 1]
 
 
-def collect_employee_input() -> tuple[str, str, str, date, date] | None:
+def prompt_holidays() -> int | None:
+    holiday_user_input = input("Annual vacation days (e.g., 25) [0=Cancel]: ").strip()
+    if not holiday_user_input or holiday_user_input == "0":
+        return None
+    try:
+        validate_holidays = int(holiday_user_input)
+        if validate_holidays < 0:
+            print("Please enter a non-negative integer.")
+            return prompt_holidays()
+        return validate_holidays
+    except ValueError:
+        print("Please enter a valid integer.")
+        return prompt_holidays()
+
+
+def collect_employee_input() -> tuple[str, str, str, date, date, int] | None:
     print("\nCreate new employee (0=Cancel for any field):")
     first = input("First name: ").strip()
     if not first or first == "0":
@@ -308,15 +348,20 @@ def collect_employee_input() -> tuple[str, str, str, date, date] | None:
     born = prompt_ddmmyyyy("Birth date")
     if born is None:
         return None
+
     hire = prompt_ddmmyyyy("Hire date")
     if hire is None:
         return None
 
-    return first, last, email, born, hire
+    holidays = prompt_holidays()
+    if holidays is None:
+        return None
+
+    return first, last, email, born, hire, holidays
 
 
 def to_employee(
-    first: str, last: str, email: str, born: "date", hire: "date"
+    first: str, last: str, email: str, born: "date", hire: "date", holidays: int
 ) -> "Employee":
     return Employee(
         first_name=first,
@@ -324,6 +369,7 @@ def to_employee(
         email=email,
         birth_date=born,
         hire_date=hire,
+        holidays=holidays,
     )
 
 
@@ -342,14 +388,15 @@ def create_employee(s: Session) -> "Employee | None":
     data = collect_employee_input()
     if data is None:
         return None
-    first, last, email, born, hire = data
+    first, last, email, born, hire, holidays = data
 
-    emp = to_employee(first, last, email, born, hire)
+    emp = to_employee(first, last, email, born, hire, holidays)
 
     if save_employee(s, emp):
         age_txt = f", Age: {calc_age(emp.birth_date)}" if emp.birth_date else ""
         console.print(
-            f"[green]✓ Employee created[/green]: {emp.first_name} {emp.last_name} ({emp.email}){age_txt}"
+            f"[green]✓ Employee created[/green]: {emp.first_name} {emp.last_name} "
+            f"({emp.email}){age_txt}, Holidays: {emp.holidays}"
         )
         return emp
     else:

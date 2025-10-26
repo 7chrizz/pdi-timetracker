@@ -26,6 +26,9 @@ class Employee(SQLModel, table=True):
     email: EmailStr = Field(sa_column_kwargs={"unique": True, "index": True})
     birth_date: date
     hire_date: date
+    holidays: int = Field(
+        default=25, nullable=False, description="Annual vacation days"
+    )
     gender: Gender = Field(default=Gender.UNKNOWN)
 
     time_entries: List["TimeEntry"] = Relationship(back_populates="employee")
