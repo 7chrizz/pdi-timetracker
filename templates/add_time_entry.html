@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TimeTrack</title>
+  <!-- Hinweis: Für die Vorschau ist das CSS hier inline eingebettet. In deinem Projekt kannst du es weiterhin aus basic.css laden. -->
+  <style>
+    :root { --radius: 12px; --gap: 14px; --shadow: 0 8px 20px rgba(0,0,0,.08); --border: 1px solid #eaeaea; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background: #fff; color: #111; line-height: 1.35; }
+    .wrap { max-width: 860px; margin: 48px auto 80px; padding: 0 18px; }
+    h1 { text-align: center; letter-spacing: .3px; margin: 0 0 22px; font-size: 28px; font-weight: 700; }
+    .card { background: #fff; border: var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; }
+    form { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+    .col-span-2 { grid-column: span 2; }
+    label { display: block; font-size: 14px; margin-bottom: 6px; color: #333; }
+    input, select, button, output, .msg { width: 100%; font: inherit; border-radius: 10px; }
+    input, select { border: var(--border); padding: 10px 12px; background: #fff; }
+    .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--gap); }
+    button { border: 0; padding: 12px 16px; background: #111; color: #fff; cursor: pointer; transition: transform .02s ease-in-out, opacity .2s; box-shadow: 0 6px 14px rgba(0,0,0,.12); }
+    button:active { transform: scale(.99); }
+    .msg { text-align: center; padding: 10px 12px; border: var(--border); background: #fafafa; color: #333; min-height: 42px; display: grid; place-items: center; }
+    .msg.ok { border-color: #c6f6d5; background: #f0fff4; color: #085e33; }
+    .msg.error { border-color: #fed7d7; background: #fff5f5; color: #9b2c2c; }
+    .table-card { margin-top: 18px; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { text-align: left; font-size: 14px; font-weight: 600; border-bottom: var(--border); padding: 10px 12px; background: #fafafa; }
+    tbody td { padding: 10px 12px; border-bottom: 1px solid #f1f1f1; font-size: 15px; }
+    @media (max-width: 680px) { form { grid-template-columns: 1fr; } .row { grid-template-columns: 1fr; } .col-span-2 { grid-column: span 1; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>TimeTrack</h1>
+
+    <section class="card">
+      <form id="time-form">
+        <div class="col-span-2">
+          <label for="employee">Name (Dropdown)</label>
+          <select id="employee" name="employee" required>
+            <option value="" selected disabled>Bitte auswählen…</option>
+            <option>Max Muster</option>
+            <option>Erika Beispiel</option>
+            <option>John Doe</option>
+          </select>
+        </div>
+
+        <div class="col-span-2">
+          <label for="date">Datum</label>
+          <input id="date" name="date" type="date" required />
+        </div>
+
+        <div class="row col-span-2">
+          <div>
+            <label for="start">Start</label>
+            <input id="start" name="start" type="time" required />
+          </div>
+          <div>
+            <label for="end">Ende</label>
+            <input id="end" name="end" type="time" required />
+          </div>
+          <div>
+            <label for="pause">Pause</label>
+            <input id="pause" name="pause" type="time" value="00:00" />
+          </div>
+        </div>
+
+        <div class="col-span-2">
+          <button type="submit">Add Time</button>
+        </div>
+
+        <div id="message" class="msg col-span-2" aria-live="polite"></div>
+      </form>
+    </section>
+
+    <section class="card table-card">
+      <h2 style="margin:0 0 10px; font-size:18px; font-weight:700;">Time added</h2>
+      <table aria-label="Hinzugefügte Zeiten">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Datum</th>
+            <th>Start</th>
+            <th>Ende</th>
+            <th>Pause</th>
+            <th>Nettozeit</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    const form = document.getElementById('time-form');
+    const rows = document.getElementById('rows');
+    const msg  = document.getElementById('message');
+
+    function toMinutes(hhmm) {
+      if (!hhmm) return 0;
+      const [h, m] = hhmm.split(':').map(Number);
+      return (h * 60) + (m || 0);
+    }
+    function fmtHHMM(mins) {
+      const sign = mins < 0 ? '-' : '';
+      const m = Math.abs(mins);
+      const h = Math.floor(m / 60);
+      const r = m % 60;
+      return `${sign}${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      const employee = form.employee.value;
+      const date     = form.date.value;
+      const start    = form.start.value;
+      const end      = form.end.value;
+      const pause    = form.pause.value || '00:00';
+
+      if (!employee || !date || !start || !end) {
+        msg.className = 'msg error';
+        msg.textContent = 'Bitte fülle alle Pflichtfelder aus.';
+        return;
+      }
+
+      let startMin = toMinutes(start);
+      let endMin   = toMinutes(end);
+      const pauseMin = toMinutes(pause);
+      if (endMin < startMin) endMin += 24 * 60; // über Mitternacht
+
+      const net = Math.max(0, endMin - startMin - pauseMin);
+      const nettoHHMM = fmtHHMM(net);
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${employee}</td>
+        <td>${date}</td>
+        <td>${start}</td>
+        <td>${end}</td>
+        <td>${pause}</td>
+        <td>${nettoHHMM}</td>
+      `;
+      rows.prepend(tr);
+
+      msg.className = 'msg ok';
+      msg.textContent = 'Eintrag hinzugefügt.';
+
+      form.start.value = '';
+      form.end.value   = '';
+      form.pause.value = '00:00';
+    });
+  </script>
+</body>
+</html>
