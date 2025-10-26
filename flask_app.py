@@ -26,7 +26,12 @@ def minutes_to_hhmm(mins: int) -> str:
 
 
 @app.route("/", methods=["GET"])
-def home():
+def menu():
+    return render_template("main.html")
+
+
+@app.route("/time/record", methods=["GET"])
+def time_record():
     with Session(engine) as s:
         employees = fetch_employees(s)
     return render_template("index.html", employees=employees)
@@ -42,7 +47,7 @@ def add_time():
 
     if not all([employee_id, date_iso, start, end_]):
         flash("Please enter all fields.", "error")
-        return redirect(url_for("home"))
+        return redirect(url_for("time_record"))
 
     d = datetime.strptime(date_iso, "%Y-%m-%d").date()
     pause_hhmm = minutes_to_hhmm(pause_min)
@@ -55,7 +60,7 @@ def add_time():
 
         if not ok:
             flash("A similar entry already exists. Nothing saved.", "error")
-            return redirect(url_for("home"))
+            return redirect(url_for("time_record"))
 
         netto = fmt_hhmm(minutes_from_entry(te))
         saved_info = {
