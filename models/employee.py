@@ -23,8 +23,12 @@ class Employee(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     first_name: str = Field(min_length=1, max_length=100, index=True)
     last_name: str = Field(min_length=1, max_length=100, index=True)
-    email: EmailStr = Field(sa_column_kwargs={"unique": True, "index": True})
-    birth_date: date
+    email: Optional[EmailStr] = Field(
+        default=None,
+        nullable=True,
+        sa_column_kwargs={"unique": True, "index": True},
+    )
+    birth_date: Optional[date] = Field(default=None, nullable=True)
     hire_date: date
     holidays: int = Field(
         default=25, nullable=False, description="Annual vacation days"

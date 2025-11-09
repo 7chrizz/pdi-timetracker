@@ -38,6 +38,41 @@ body {
   margin: 48px auto 80px;
   padding: 0 18px;
 }
+.home-btn {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+
+  height: 40px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--shadow);       /* identisch zu Menu */
+  color: var(--text);
+
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+
+  transition: background .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+
+.home-btn:focus {
+  outline: 2px solid #c7d2fe;
+  outline-offset: 2px;
+}
+
+.home-btn:hover {
+  background: #f8fafc;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(2, 6, 23, .12), 0 2px 6px rgba(2, 6, 23, .10);
+}
 
 h1 {
   text-align: center;
