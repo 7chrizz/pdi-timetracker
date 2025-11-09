@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "email-validator>=2.3.0",
+    "gunicorn>=23.0.0",
+    "psycopg2-binary>=2.9.11",
     "pydantic>=2.3",
     "rich>=14.2.0",
     "sqlalchemy>=2.0",

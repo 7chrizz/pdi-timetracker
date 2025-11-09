@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Timetracker - Reporting</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='reporting.css') }}">
+</head>
+<body>
+  <div class="topbar">
+    <div class="menu">
+      <input type="checkbox" id="menu-toggle">
+      <label class="menu-btn" for="menu-toggle">☰ Menü</label>
+      <nav class="menu-panel" aria-label="Hauptmenü">
+        <a href="/employees/new">Neuen Mitarbeiter erstellen</a>
+        <a href="/employees/edit">Mitarbeiter bearbeiten</a>
+        <a href="/employees/delete">Mitarbeiter löschen</a>
+        <a href="/add_time">Zeit erfassen</a>
+        <a href="/vacation">Urlaubsplan</a>
+        <a href="/logout">Logout</a>
+      </nav>
+    </div>
+
+    <div class="welcome">Welcome {{ user_name|default('User') }}</div>
+
+    <div class="topbar-actions" style="justify-self:end; display:flex; gap:10px; align-items:center;">
+      <form class="year-picker" method="get" action="/report">
+        <label for="year-select" class="visually-hidden">Berichtsjahr</label>
+        <select id="year-select" name="year" class="year-select" onchange="this.form.submit()">
+          {% for y in years %}
+            <option value="{{ y }}" {% if y == sel_year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+  </div>
+
+  <header>
+    <h1>Timetracker - Reporting</h1>
+  </header>
+
+  <main class="container">
+    <div class="cards">
+      {% if cards and cards|length %}
+        {% for c in cards %}
+          <article class="card">
+            <div class="card__meta">Mitarbeiter ID: {{ c.id }}</div>
+            <div class="card__titlebar">
+              <h2 class="card__title">{{ c.name }}</h2>
+              <span class="title-legend">Ist / Soll</span>
+            </div>
+            {% for m in c.months %}
+              <div class="month-row">
+                <div class="month-name">{{ m.label }}</div>
+                <div class="month-hours">
+                  <span class="ist {{ m.cmp }}">{{ m.ist_txt }}</span>/<span class="soll">{{ m.soll_txt }}</span>
+                </div>
+              </div>
+            {% endfor %}
+
+            <hr class="divider" />
+
+            <div class="total-line">
+              <span>Soll-Differenz</span>
+              <strong class="diff {{ 'neg' if c.sum_diff_sign == '-' else 'pos' }}">
+                {{ c.sum_diff_sign }}{{ c.sum_diff_txt }} Std
+              </strong>
+            </div>
+            <div class="total-line"><span>Verbl. Urlaubstage</span><strong>{{ c.remaining_holidays }}</strong></div>
+            <div class="total-line"><span>Krank-Einträge</span><strong>{{ c.sick_count }}</strong></div>
+          </article>
+        {% endfor %}
+      {% else %}
+        <p style="color:#64748b">Keine Daten für {{ sel_year }} vorhanden.</p>
+      {% endif %}
+    </div>
+  </main>
+</body>
+</html>

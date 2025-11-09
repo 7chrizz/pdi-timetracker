@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import os
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date
-from typing import List, Tuple
+from datetime import date, datetime
+from typing import List, Optional, Tuple
 
 from rich import print
 from rich.console import Console
@@ -13,8 +14,8 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from models import Employee, TimeEntry
 
+CANCEL = object()
 console = Console(force_terminal=True, force_interactive=True)
-DB_URL = "sqlite:///timetracker.db"
 
 MONTH_EN = [
     "",
@@ -50,10 +51,15 @@ def fmt_hhmm(mins: int) -> str:
 
 
 def get_engine():
-    engine = create_engine(
-        DB_URL, echo=False, connect_args={"check_same_thread": False}
-    )
-    return engine
+    db_url = os.getenv("DATABASE_URL", "sqlite:///app.db")
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
+
+    connect_args = {}
+    if "DATABASE_URL" in os.environ:
+        connect_args = {"sslmode": "require"}
+
+    return create_engine(db_url, pool_pre_ping=True, connect_args=connect_args)
 
 
 def _parse_ddmmyyyy_loose(s: str) -> date:
@@ -88,6 +94,36 @@ def prompt_ddmmyyyy(label: str) -> date | None:
             print("[red]✗[/red] Invalid date. Please use D.M.YYYY or DD.MM.YYYY.")
 
 
+def prompt_optional_ddmmyyyy(label: str):
+    while True:
+        raw = input(f"{label} (DD.MM.YYYY, Enter=empty, 0=Cancel): ").strip()
+        if raw == "0":
+            return CANCEL
+        if raw == "":
+            return None  # NULL in DB
+        try:
+            d = datetime.strptime(raw, "%d.%m.%Y").date()
+            return d
+        except ValueError:
+            print(
+                "Please enter the date as DD.MM.YYYY, press Enter to leave blank, or 0 to cancel."
+            )
+
+
+def prompt_holidays(default: int = 25):
+    while True:
+        raw = input(f"Holidays in days (Enter={default}, 0=Cancel): ").strip()
+        if raw == "0":
+            return CANCEL
+        if raw == "":
+            return default
+        if raw.isdigit():
+            return int(raw)
+        print(
+            "Please enter a whole number, press Enter for the default value, or 0 to cancel."
+        )
+
+
 def prompt_time(label: str) -> str | None:
     while True:
         s = input(f"{label} (HH:MM or HHMM, 0=Cancel): ").strip()
@@ -110,6 +146,13 @@ def prompt_break_minutes(label: str = "Break in (minutes): ") -> str | None:
                 h, m = divmod(mins, 60)
                 return f"{h:02d}:{m:02d}"
         print("✗ Invalid value. Enter minutes as a non-negative integer (0–1440).")
+
+
+def normalize_email(raw: Optional[str]) -> Optional[str]:
+    if raw is None:
+        return None
+    s = raw.strip()
+    return s.lower() if s else None
 
 
 def calc_age(born: date, ref: date | None = None) -> int:
@@ -318,35 +361,26 @@ def pick_employee(s: Session, title: str = "Select employee") -> "Employee | Non
     return None if idx is None else employees[idx - 1]
 
 
-def prompt_holidays() -> int | None:
-    holiday_user_input = input("Annual vacation days (e.g., 25) [0=Cancel]: ").strip()
-    if not holiday_user_input or holiday_user_input == "0":
-        return None
-    try:
-        validate_holidays = int(holiday_user_input)
-        if validate_holidays < 0:
-            print("Please enter a non-negative integer.")
-            return prompt_holidays()
-        return validate_holidays
-    except ValueError:
-        print("Please enter a valid integer.")
-        return prompt_holidays()
-
-
-def collect_employee_input() -> tuple[str, str, str, date, date, int] | None:
+def collect_employee_input() -> (
+    Tuple[str, str, Optional[str], Optional[date], date, int] | None
+):
     print("\nCreate new employee (0=Cancel for any field):")
+
     first = input("First name: ").strip()
     if not first or first == "0":
         return None
+
     last = input("Last name: ").strip()
     if not last or last == "0":
         return None
-    email = input("Email: ").strip()
-    if not email or email == "0":
-        return None
 
-    born = prompt_ddmmyyyy("Birth date")
-    if born is None:
+    email_raw = input("Email (Enter=empty, 0=Cancel): ").strip()
+    if email_raw == "0":
+        return None
+    email: Optional[str] = normalize_email(email_raw or None)
+
+    born = prompt_optional_ddmmyyyy("Birth date")
+    if born is CANCEL:
         return None
 
     hire = prompt_ddmmyyyy("Hire date")
@@ -354,14 +388,19 @@ def collect_employee_input() -> tuple[str, str, str, date, date, int] | None:
         return None
 
     holidays = prompt_holidays()
-    if holidays is None:
+    if holidays is CANCEL:
         return None
 
     return first, last, email, born, hire, holidays
 
 
 def to_employee(
-    first: str, last: str, email: str, born: "date", hire: "date", holidays: int
+    first: str,
+    last: str,
+    email: Optional[str],
+    born: Optional[date],
+    hire: date,
+    holidays: int,
 ) -> "Employee":
     return Employee(
         first_name=first,
@@ -384,11 +423,22 @@ def save_employee(s: Session, emp: "Employee") -> bool:
         return False
 
 
+def email_exists(s: Session, email: Optional[str]) -> bool:
+    if not email:
+        return False
+    q = select(Employee.id).where(Employee.email == email)
+    return s.exec(q).first() is not None
+
+
 def create_employee(s: Session) -> "Employee | None":
     data = collect_employee_input()
     if data is None:
         return None
     first, last, email, born, hire, holidays = data
+
+    if email and email_exists(s, email):
+        print(f"✗ Email already in use (UNIQUE): {email}")
+        return None
 
     emp = to_employee(first, last, email, born, hire, holidays)
 

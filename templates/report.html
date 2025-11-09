@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Timetracker - Reporting</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='reporting.css') }}">
+</head>
+<body>
+  <div class="topbar">
+    <div class="menu">
+      <input type="checkbox" id="menu-toggle">
+      <label class="menu-btn action-btn" for="menu-toggle">☰ Menu</label>
+        <nav class="menu-panel" aria-label="Main menu">
+          <a href="/employees/new"    class="is-disabled" aria-disabled="true" tabindex="-1">Create new employee</a>
+          <a href="/employees/edit"   class="is-disabled" aria-disabled="true" tabindex="-1">Edit employee</a>
+          <a href="/employees/delete" class="is-disabled" aria-disabled="true" tabindex="-1">Delete employee</a>
+          <a href="/time/record">Record time</a>
+          <a href="/vacation"         class="is-disabled" aria-disabled="true" tabindex="-1">Vacation planner</a>
+          <a href="/logout"           class="is-disabled" aria-disabled="true" tabindex="-1">Logout</a>
+        </nav>
+    </div>
+    <div class="welcome">Welcome {{ user_name|default('User') }}</div>
+
+    <div class="topbar-actions">
+      <form class="year-picker" method="get" action="/report">
+        <label for="year-select" class="visually-hidden">Reporting Year</label>
+        <select id="year-select" name="year" class="year-select action-btn" onchange="this.form.submit()">
+          {% for year_option in available_years_list %}
+            <option value="{{ year_option }}" {% if year_option == selected_year %}selected{% endif %}>
+              {{ year_option }}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+  </div>
+
+  <div class="brand-banner">
+    <h1>Timetracker – Reporting</h1>
+  </div>
+
+  <main class="container">
+    <div class="cards">
+      {% if employee_cards and employee_cards|length %}
+        {% for employee_card in employee_cards %}
+          <article class="card">
+            <div class="card__meta">Mitarbeiter ID: {{ employee_card.id }}</div>
+            <div class="card__titlebar">
+              <h2 class="card__title">{{ employee_card.name }}</h2>
+              <span class="title-legend">Current / Target</span>
+            </div>
+            {% for month_row in employee_card.months %}
+            <div class="month-row">
+              <div class="month-name">{{ month_row.label }}</div>
+              <div class="month-hours">
+                <span class="ist">{{ month_row.current_txt }}</span>/<span class="soll">{{ month_row.target_txt }}</span>
+              </div>
+            </div>
+          {% endfor %}
+
+
+            <hr class="divider" />
+
+            <div class="total-line">
+              <span>Diff.</span>
+              <strong class="diff {{ 'neg' if employee_card.sum_diff_sign == '-' else 'pos' }}">
+                {{ employee_card.sum_diff_sign }}{{ employee_card.sum_diff_txt }} Std
+              </strong>
+            </div>
+            <div class="total-line"><span>Remaining holidays</span><strong>{{ employee_card.remaining_holidays }}</strong></div>
+            <div class="total-line"><span>Sick days</span><strong>{{ employee_card.sick_count }}</strong></div>
+          </article>
+        {% endfor %}
+      {% else %}
+        <p style="color:#64748b">Keine Daten für {{ sel_year }} vorhanden.</p>
+      {% endif %}
+    </div>
+  </main>
+</body>
+</html>
