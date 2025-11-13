@@ -644,9 +644,13 @@ def print_report_for_employee(s: Session):
     print(f"Sum (month): {fmt_hhmm(monthly_sum[(y, m)])}")
 
 
+def create_tables(engine):
+    SQLModel.metadata.create_all(engine)
+
+
 def main():
     engine = get_engine()
-    SQLModel.metadata.create_all(engine)
+    create_tables(engine)
 
     with Session(engine) as s:
         while True:
