@@ -1,0 +1,119 @@
+:root{
+  --bg:#f6f7fb;
+  --card:#ffffff;
+  --border:#e6e8ef;
+  --shadow:0 8px 24px rgba(0,0,0,.08);
+  --primary:#2563eb;
+  --primary-hover:#1e40af;
+  --text:#0f172a;
+  --muted:#6b7280;
+  --ok-bg:#d1fae5; --ok:#065f46;
+  --err-bg:#fee2e2; --err:#7f1d1d;
+  --info-bg:#e0f2fe; --info:#0c4a6e;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  color:var(--text);
+  background:var(--bg);
+}
+.brand-banner{
+  background:#00a1e4;
+  color:#fff;
+  padding:12px 20px;
+  border-bottom:1px solid rgba(0,0,0,0.1);
+  text-align:center;
+}
+.brand-banner h1{
+  margin:0;
+  font-size:20px;
+  font-weight:600;
+}
+
+/* Damit die Karte nicht am Banner klebt */
+.center { padding-top: 24px; }
+
+.center{
+  min-height:100%;
+  display:grid;
+  place-items:center;
+  padding:24px;
+}
+
+.card{
+  width:100%;
+  max-width:380px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;
+  box-shadow:var(--shadow);
+  padding:24px 22px;
+}
+
+h1{
+  margin:0 0 14px;
+  font-size:20px;
+  line-height:1.2;
+}
+
+form{margin-top:10px}
+
+input{
+  width:100%;
+  padding:12px 14px;
+  margin-top:10px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  font-size:16px;
+  outline:none;
+}
+input:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+
+h1#login-title {
+  text-align: center;
+  width: 100%;
+}
+
+
+button{
+  width:100%;
+  margin-top:14px;
+  padding:12px 14px;
+  border:0;
+  border-radius:12px;
+  background:var(--primary);
+  color:#fff;
+  font-weight:600;
+  font-size:16px;
+  cursor:pointer;
+}
+button:hover{background:var(--primary-hover)}
+
+.flashes {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  text-align: center;
+}
+
+.flash {
+  display: inline-block;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  text-align: center;
+}
+.flash{padding:10px 12px; border-radius:10px; font-size:14px; margin-top:8px}
+.success{background:var(--ok-bg); color:var(--ok)}
+.danger{background:var(--err-bg); color:var(--err)}
+.info{background:var(--info-bg); color:var(--info)}
+
+.sr-only{
+  position:absolute !important;
+  height:1px; width:1px;
+  overflow:hidden; clip:rect(1px,1px,1px,1px);
+  white-space:nowrap; border:0; padding:0; margin:-1px;
+}
