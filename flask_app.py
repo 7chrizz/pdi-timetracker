@@ -2,8 +2,17 @@ import calendar
 import os
 from datetime import date, datetime
 
+from dotenv import load_dotenv
 from flask import Flask, flash, redirect, render_template, request, url_for
-from sqlmodel import Session, SQLModel
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
+from sqlmodel import Session
 
 from main import (
     MONTH_EN,
@@ -19,9 +28,33 @@ from main import (
 from models import Employee
 
 app = Flask(__name__)
+load_dotenv()
 app.secret_key = os.getenv("SECRET_KEY", "dev")
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
+login_manager.login_message_category = "info"
+
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "test123")
+
+
+class SimpleUser(UserMixin):
+    def __init__(self, user_id: int, username: str):
+        self.id = user_id
+        self.username = username
+
+
+SINGLE_USER = SimpleUser(1, ADMIN_USERNAME)
+
+
+@login_manager.user_loader
+def load_user(user_id: str):
+    return SINGLE_USER if str(SINGLE_USER.id) == str(user_id) else None
+
+
 engine = get_engine()
-SQLModel.metadata.create_all(engine)
 
 
 def minutes_to_hhmm(mins: int) -> str:
@@ -53,11 +86,41 @@ def available_years(session: Session) -> list[int]:
 
 
 @app.route("/", methods=["GET"])
+@login_required
 def home():
     return redirect(url_for("report"))
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if hasattr(current_user, "is_authenticated") and current_user.is_authenticated:
+        return redirect(url_for("report"))
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        if username == SINGLE_USER.username and password == ADMIN_PASSWORD:
+            login_user(SINGLE_USER)
+            next_url = request.args.get("next")
+            return redirect(next_url or url_for("report"))
+
+        else:
+            flash("Invalid username or password.", "danger")
+
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+    flash("You have been logged out.", "info")
+    return redirect(url_for("login"))
+
+
 @app.route("/report", methods=["GET"])
+@login_required
 def report():
     selected_year = request.args.get("year", type=int) or date.today().year
     user_name = "User"
@@ -68,7 +131,6 @@ def report():
     with Session(engine) as session:
         available_years_list = available_years(session)
 
-        # Keine Daten → leere Seite mit den *neuen* Keys zurückgeben
         if not available_years_list:
             return render_template(
                 "report.html",
@@ -78,7 +140,6 @@ def report():
                 user_name=user_name,
             )
 
-        # Fallback aufs neueste Jahr
         if selected_year not in available_years_list:
             selected_year = max(available_years_list)
 
@@ -130,11 +191,12 @@ def report():
         employee_cards=employee_cards,
         available_years_list=available_years_list,
         selected_year=selected_year,
-        user_name=user_name,
+        user_name=current_user.username,
     )
 
 
 @app.route("/time/record", methods=["GET"])
+@login_required
 def time_record():
     with Session(engine) as s:
         employees = fetch_employees(s)
@@ -142,6 +204,7 @@ def time_record():
 
 
 @app.route("/add_time", methods=["POST"])
+@login_required
 def add_time():
     employee_id = request.form.get("employee")
     date_iso = request.form.get("date")
