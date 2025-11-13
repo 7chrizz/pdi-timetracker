@@ -7,12 +7,11 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='basic.css') }}">
 </head>
 <body>
+  <div class="brand-banner">
+    <h1>Timetracker – Record time</h1>
+  </div>
 <a href="{{ url_for('report') }}" class="home-btn">Home</a>
   <div class="wrap">
-    <div class="brand-banner">
-      <h1>Record time for employee</h1>
-    </div>
-
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
