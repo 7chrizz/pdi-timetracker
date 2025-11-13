@@ -18,19 +18,16 @@ body {
   line-height: 1.35;
 }
 .brand-banner{
-  background:var(--brand-blue);
+  background:#00a1e4;
   color:#fff;
-  border-radius:12px;
-  padding:14px 18px;
+  padding:12px 20px;
+  border-bottom:1px solid rgba(0,0,0,0.1);
   text-align:center;
-  font-weight:700;
-  box-shadow: var(--shadow, 0 8px 20px rgba(0,0,0,.08));
-  margin:0 0 16px;
 }
 .brand-banner h1{
   margin:0;
-  font-size:28px;
-  letter-spacing:.3px;
+  font-size:20px;
+  font-weight:600;
 }
 
 .wrap {
@@ -40,7 +37,7 @@ body {
 }
 .home-btn {
   position: absolute;
-  top: 15px;
+  top: 7px;
   left: 15px;
 
   height: 40px;
@@ -49,8 +46,10 @@ body {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel);
-  box-shadow: var(--shadow);       /* identisch zu Menu */
-  color: var(--text);
+  box-shadow: var(--shadow);
+  color: #0f172a;
+  background: #fff;
+  border-color: #e5e7eb;
 
   display: inline-flex;
   align-items: center;

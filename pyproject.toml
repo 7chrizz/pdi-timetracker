@@ -5,12 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "dotenv>=0.9.9",
     "email-validator>=2.3.0",
     "flask>=3.1.2",
     "flask-login>=0.6.3",
     "gunicorn>=23.0.0",
     "psycopg2-binary>=2.9.11",
     "pydantic>=2.3",
+    "python-dotenv>=1.2.1",
     "rich>=14.2.0",
     "sqlalchemy>=2.0",
     "sqlmodel>=0.0.21",
