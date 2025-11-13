@@ -24,6 +24,7 @@ from main import (
     save_time_entry,
     summarize_minutes_by_month,
     to_time_entry,
+    create_tables,
 )
 from models import Employee
 
@@ -55,6 +56,7 @@ def load_user(user_id: str):
 
 
 engine = get_engine()
+create_tables(engine)
 
 
 def minutes_to_hhmm(mins: int) -> str:
