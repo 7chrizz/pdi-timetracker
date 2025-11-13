@@ -45,6 +45,8 @@ A lightweight **time tracking system** built with Flask, SQLModel, and Jinja2 �
 
 ---
 
+## 🛠️ Installation
+
 ```
 git clone https://github.com/7chrizz/pdi-timetracker.git
 cd pdi-timetracker
@@ -57,6 +59,7 @@ uv run flask --app flask_app:app run
 ---
 
 Copyright (c) 2025 7chrizz
+
 
 
 
