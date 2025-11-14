@@ -16,6 +16,7 @@ from sqlmodel import Session
 
 from main import (
     MONTH_EN,
+    create_tables,
     fetch_employee_entries,
     fetch_employees,
     fmt_hhmm,
@@ -55,6 +56,7 @@ def load_user(user_id: str):
 
 
 engine = get_engine()
+create_tables(engine)
 
 
 def minutes_to_hhmm(mins: int) -> str:
